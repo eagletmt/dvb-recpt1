@@ -1,0 +1,26 @@
+CXXFLAGS += -std=c++0x -pipe -mtune=native -O2 -Wall -Wextra
+ASFLAGS +=
+LDFLAGS += -lrt -lboost_program_options
+INCLUDES +=
+
+CXXFILES[] =
+   record
+   tuner
+   oneshot_timer
+MAIN = recpt1
+
+CONFDIR = /etc/recpt1
+BINDIR = /usr/bin
+
+.DEFAULT: $(CXXProgram $(MAIN), $(CXXFILES))
+
+.PHONY: clean install
+
+clean: $(MAIN)
+  rm -f $(dependencies-proper $(MAIN))
+
+install: $(MAIN)
+  mkdir -p $(CONFDIR)
+  install -m644 adapters.conf $(CONFDIR)/
+  install -m644 channels.conf $(CONFDIR)/
+  install -m755 $(MAIN) $(BINDIR)/
