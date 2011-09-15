@@ -4,6 +4,8 @@
 #include <string>
 #include <fstream>
 #include <queue>
+#include <thread>
+#include <atomic>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -99,40 +101,22 @@ void recorder(int duration, const std::string& adapter, const char *outfile)
     die("open(dev)");
   }
 
+  std::atomic<bool> f_exit(false);
   int wfd = open(outfile, O_WRONLY | O_CREAT, 0644);
   if (wfd == -1) {
     die("open(outfile)");
   }
 
-  struct pollfd fds[3];
-  fds[0].fd = timer.fd();
-  fds[0].events = POLLIN | POLLERR;
-  fds[1].fd = rfd;
-  fds[1].events = POLLIN | POLLERR;
-  fds[2].fd = wfd;
-  fds[2].events = POLLOUT | POLLERR;
   std::queue<chunk *> q;
-  for (;;) {
-    for (struct pollfd& pfd : fds) {
-      pfd.revents = 0;
-    }
-    int nfds = poll(fds, 3, 5*1000);
-    if (nfds < 0) {
-      std::perror("poll");
-    } else if (nfds > 0) {
-      if (fds[1].revents & POLLIN) {
-        chunk *c = new chunk(DEFAULT_CHUNK_SIZE);
-        c->size = read(rfd, c->buf, c->capacity);
-        if (c->size < 0) {
-          std::perror("read(dev)");
-        } else {
-          c->shrink();
-          q.push(c);
-        }
-      }
+  std::mutex queue_mutex;
 
-      if (fds[2].revents & POLLOUT) {
+  std::thread writer([&f_exit, &q, &queue_mutex, wfd]() {
+    while (!f_exit) {
+      bool empty = true;
+      {
+        std::lock_guard<std::mutex> lock(queue_mutex);
         if (!q.empty()) {
+          empty = false;
           chunk *c = q.front();
           const ssize_t w = write(wfd, c->buf + c->offset, c->size - c->offset);
           if (w < 0) {
@@ -149,29 +133,45 @@ void recorder(int duration, const std::string& adapter, const char *outfile)
           }
         }
       }
+      if (empty) {
+        usleep(100 * 1000);
+      }
+    }
+  });
+
+  struct pollfd fds[2];
+  fds[0].fd = timer.fd();
+  fds[0].events = POLLIN | POLLERR;
+  fds[1].fd = rfd;
+  fds[1].events = POLLIN | POLLERR;
+  for (;;) {
+    for (struct pollfd& pfd : fds) {
+      pfd.revents = 0;
+    }
+    int nfds = poll(fds, 2, 5*1000);
+    if (nfds < 0) {
+      std::perror("poll");
+    } else if (nfds > 0) {
+      if (fds[1].revents & POLLIN) {
+        chunk *c = new chunk(DEFAULT_CHUNK_SIZE);
+        c->size = read(rfd, c->buf, c->capacity);
+        if (c->size < 0) {
+          std::perror("read(dev)");
+        } else {
+          c->shrink();
+          std::lock_guard<std::mutex> lock(queue_mutex);
+          q.push(c);
+        }
+      }
 
       if (fds[0].revents & POLLIN) {
+        f_exit = true;
         break;
       }
     }
   }
   close(rfd);
-  while (!q.empty()) {
-    chunk *c = q.front();
-    const ssize_t w = write(wfd, c, c->size);
-    if (w < 0) {
-      std::perror("write(outfile)");
-      // discard this chunk
-      delete c;
-      q.pop();
-    } else {
-      c->offset += w;
-      if (c->offset >= c->size) {
-        delete c;
-        q.pop();
-      }
-    }
-  }
+  writer.join();
   close(wfd);
 }
 
