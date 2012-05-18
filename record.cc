@@ -5,6 +5,7 @@
 #include <fstream>
 #include <queue>
 #include <thread>
+#include <mutex>
 #include <atomic>
 #include <errno.h>
 #include <fcntl.h>

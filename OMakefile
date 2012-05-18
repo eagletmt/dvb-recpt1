@@ -1,4 +1,4 @@
-CXXFLAGS += -std=c++0x -pipe -mtune=native -O2 -Wall -Wextra
+CXXFLAGS += -std=c++11 -pipe -mtune=native -O2 -Wall -Wextra
 ASFLAGS +=
 LDFLAGS += -lrt -lboost_program_options
 INCLUDES +=
