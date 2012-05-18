@@ -11,25 +11,29 @@ static void die(const char *msg)
   exit(EXIT_FAILURE);
 }
 
+static char *sockpath;
+
 static void tune(int ch);
 
 int main(int argc, char *argv[])
 {
-  if (argc == 1) {
-    fprintf(stderr, "usage: %s tune ch\n", argv[0]);
+  if (argc < 3) {
+    fprintf(stderr, "usage: %s sockpath tune ch\n", argv[0]);
     return 1;
   }
+  sockpath = argv[1];
+  const char *cmd = argv[2];
 
-  const char *cmd = argv[1];
   if (strcmp(cmd, "tune") == 0) {
-    if (argc != 3) {
+    if (argc != 4) {
       fprintf(stderr, "tune command requires channel\n");
       return 1;
     }
+    const char *arg = argv[3];
     char *endptr = NULL;
-    int ch = strtol(argv[2], &endptr, 10);
+    int ch = strtol(arg, &endptr, 10);
     if (*endptr != '\0') {
-      fprintf(stderr, "invalid channel: %s\n", argv[2]);
+      fprintf(stderr, "invalid channel: %s\n", arg);
     } else {
       tune(ch);
     }
@@ -48,7 +52,7 @@ static void tune(int ch)
   }
   struct sockaddr_un sun;
   sun.sun_family = AF_UNIX;
-  snprintf(sun.sun_path, sizeof sun.sun_path, "%s", "/tmp/recpt1.sock");
+  snprintf(sun.sun_path, sizeof sun.sun_path, "%s", sockpath);
   socklen_t len = sizeof sun.sun_family + strlen(sun.sun_path);
   if (connect(fd, (struct sockaddr *)&sun, len) == -1) {
     die("cocnnect");

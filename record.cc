@@ -96,7 +96,7 @@ void die(const char *msg)
   std::exit(EXIT_FAILURE);
 }
 
-int create_master(const std::string& server_name, sockaddr_un& sun, socklen_t& len)
+int create_master(const std::string& adapter, std::string& path, sockaddr_un& sun, socklen_t& len)
 {
   int fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (fd == -1) {
@@ -111,9 +111,12 @@ int create_master(const std::string& server_name, sockaddr_un& sun, socklen_t& l
     close(fd);
     return -1;
   }
+  path = adapter;
+  std::replace(path.begin(), path.end(), '/', '-');
+  path = "/tmp/recpt1" + path + ".sock";
   sun.sun_family = AF_UNIX;
-  std::snprintf(sun.sun_path, sizeof sun.sun_path, "%s", server_name.c_str());
-  len = sizeof sun.sun_family + server_name.size();
+  std::snprintf(sun.sun_path, sizeof sun.sun_path, "%s", path.c_str());
+  len = sizeof sun.sun_family + path.size();
   if (bind(fd, static_cast<struct sockaddr *>(static_cast<void *>(&sun)), len) == -1) {
     std::perror("bind");
     close(fd);
@@ -121,7 +124,7 @@ int create_master(const std::string& server_name, sockaddr_un& sun, socklen_t& l
   }
   if (listen(fd, 5) == -1) {
     std::perror("listen");
-    unlink(server_name.c_str());
+    unlink(path.c_str());
     close(fd);
     return -1;
   }
@@ -142,7 +145,8 @@ void recorder(int duration, recpt1::tuner& tuner, const char *outfile)
 
   struct sockaddr_un sun;
   socklen_t socklen;
-  int listenfd = create_master("/tmp/recpt1.sock", sun, socklen);
+  std::string sock_path;
+  int listenfd = create_master(tuner.adapter(), sock_path, sun, socklen);
   std::thread master([&f_exit, &tuner, listenfd, &sun, &socklen]() {
     while (!f_exit) {
       int fd = accept(listenfd, static_cast<sockaddr *>(static_cast<void *>(&sun)), &socklen);
@@ -246,7 +250,7 @@ void recorder(int duration, recpt1::tuner& tuner, const char *outfile)
   close(wfd);
   master.join();
   if (listenfd != -1) {
-    unlink("/tmp/recpt1.sock");
+    unlink(sock_path.c_str());
   }
 }
 
