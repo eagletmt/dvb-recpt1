@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <sstream>
 #include <fstream>
 #include <queue>
 #include <thread>
@@ -10,6 +11,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/time.h>
 #include <poll.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
@@ -22,7 +26,7 @@ static const char *ADAPTERS_CONFIG_FILE_PATH = "/etc/recpt1/adapters.conf";
 static const char *CHANNELS_CONFIG_FILE_PATH = "/etc/recpt1/channels.conf";
 
 static void die(const char *msg) __attribute__((noreturn));
-static void recorder(int duration, const std::string& adapter, const char *outfile);
+static void recorder(int duration, recpt1::tuner& tuner, const char *outfile);
 static po::variables_map& parse_config_file(const char *path, po::variables_map& vmap);
 
 struct chunk
@@ -79,7 +83,7 @@ int main(int argc, char *argv[])
   }
   recpt1::tuner tuner(adapters, recpt1::tuner::parse_channels(ifs));
   if (tuner.tune(channel) && tuner.track()) {
-    recorder(duration, tuner.adapter(), outfile);
+    recorder(duration, tuner, outfile);
     return 0;
   } else {
     return 1;
@@ -92,17 +96,83 @@ void die(const char *msg)
   std::exit(EXIT_FAILURE);
 }
 
-void recorder(int duration, const std::string& adapter, const char *outfile)
+int create_master(const std::string& server_name, sockaddr_un& sun, socklen_t& len)
+{
+  int fd = socket(PF_UNIX, SOCK_STREAM, 0);
+  if (fd == -1) {
+    std::perror("socket");
+    return -1;
+  }
+  struct timeval tv;
+  tv.tv_sec = 0;
+  tv.tv_usec = 100*1000;
+  if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) == -1) {
+    std::perror("setsockopt(SO_RCVTIMEO)");
+    close(fd);
+    return -1;
+  }
+  sun.sun_family = AF_UNIX;
+  std::snprintf(sun.sun_path, sizeof sun.sun_path, "%s", server_name.c_str());
+  len = sizeof sun.sun_family + server_name.size();
+  if (bind(fd, static_cast<struct sockaddr *>(static_cast<void *>(&sun)), len) == -1) {
+    std::perror("bind");
+    close(fd);
+    return -1;
+  }
+  if (listen(fd, 5) == -1) {
+    std::perror("listen");
+    unlink(server_name.c_str());
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
+void recorder(int duration, recpt1::tuner& tuner, const char *outfile)
 {
   recpt1::oneshot_timer timer(duration);
 
-  const std::string path = adapter + "/dvr0";
+  const std::string path = tuner.adapter() + "/dvr0";
   int rfd = open(path.c_str(), O_RDONLY);
   if (rfd == -1) {
     die("open(dev)");
   }
 
   std::atomic<bool> f_exit(false);
+
+  struct sockaddr_un sun;
+  socklen_t socklen;
+  int listenfd = create_master("/tmp/recpt1.sock", sun, socklen);
+  std::thread master([&f_exit, &tuner, listenfd, &sun, &socklen]() {
+    while (!f_exit) {
+      int fd = accept(listenfd, static_cast<sockaddr *>(static_cast<void *>(&sun)), &socklen);
+      if (fd != -1) {
+        char buf[BUFSIZ];
+        ssize_t n = read(fd, buf, sizeof buf - 1);
+        if (n < 0) {
+          std::perror("read(accept)");
+        } else if (n > 0) {
+          buf[n] = '\0';
+          std::istringstream iss(buf);
+          std::string cmd;
+          if (iss >> cmd && cmd == "tune") {
+            int ch;
+            if (iss >> ch) {
+              std::cout << "Switch to channel " << ch << "..." << std::endl;
+              if (tuner.tune(ch) && tuner.track()) {
+                std::cout << "Successfully tuned" << std::endl;
+              } else {
+                std::cout << "Failed to tune!" << std::endl;
+                f_exit = true;
+              }
+            }
+          }
+        }
+        close(fd);
+      }
+    }
+  });
+
   int wfd = open(outfile, O_WRONLY | O_CREAT, 0644);
   if (wfd == -1) {
     die("open(outfile)");
@@ -174,6 +244,10 @@ void recorder(int duration, const std::string& adapter, const char *outfile)
   close(rfd);
   writer.join();
   close(wfd);
+  master.join();
+  if (listenfd != -1) {
+    unlink("/tmp/recpt1.sock");
+  }
 }
 
 po::variables_map& parse_config_file(const char *path, po::variables_map& vmap)

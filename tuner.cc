@@ -115,11 +115,13 @@ bool tuner::track()
     return false;
   }
 
-  const std::string path = *adapter_ + "/demux0";
-  int fd = open(path.c_str(), O_RDWR);
-  if (fd == -1) {
-    std::perror(("open(" + path + ")").c_str());
-    return false;
+  if (demux_fd_ == -1) {
+    const std::string path = *adapter_ + "/demux0";
+    demux_fd_ = open(path.c_str(), O_RDWR);
+    if (demux_fd_ == -1) {
+      std::perror(("open(" + path + ")").c_str());
+      return false;
+    }
   }
 
   struct dmx_pes_filter_params filter;
@@ -128,13 +130,12 @@ bool tuner::track()
   filter.output = DMX_OUT_TS_TAP;
   filter.pes_type = DMX_PES_VIDEO;
   filter.flags = DMX_IMMEDIATE_START;
-  if (ioctl(fd, DMX_SET_PES_FILTER, &filter) == -1) {
+  if (ioctl(demux_fd_, DMX_SET_PES_FILTER, &filter) == -1) {
     std::perror("ioctl DMX_SET_PES_FILTER");
-    close(fd);
+    close(demux_fd_);
     return false;
   }
 
-  demux_fd_ = fd;
   return true;
 }
 
