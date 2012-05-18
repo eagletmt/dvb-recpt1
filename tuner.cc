@@ -34,62 +34,78 @@ tuner::~tuner()
 
 bool tuner::tune(int ch)
 {
+  if (frontend_fd_ != -1) {
+    if (tune_impl(ch)) {
+      return true;
+    }
+    close(frontend_fd_);
+    frontend_fd_ = -1;
+    if (demux_fd_ != -1) {
+      close(demux_fd_);
+      demux_fd_ = -1;
+    }
+  }
+
   for (auto it = adapters_.cbegin(); it != adapters_.cend(); ++it) {
     const std::string path = *it + "/frontend0";
-    int fd = open(path.c_str(), O_RDWR);
-    if (fd == -1) {
+    frontend_fd_ = open(path.c_str(), O_RDWR);
+    if (frontend_fd_ == -1) {
       std::perror(("open(" + path + ")").c_str());
       continue;
     }
-
-    DECLTYPE(channels_)::const_iterator jt = channels_.cend();
-
-    struct dvb_frontend_info info;
-    if (ioctl(fd, FE_GET_INFO, &info) == -1) {
-      std::perror("ioctl FE_GET_INFO");
-      goto CLEANUP;
+    adapter_ = it;
+    if (tune_impl(ch)) {
+      return true;
     }
-    if (info.type == FE_OFDM) {
-      jt = channels_.find(ch);
-    }
-    if (jt == channels_.cend()) {
-      std::cerr << "cannot tune to specified channel with adapter " << *it << std::endl;
-      goto CLEANUP;
-    }
-
-    struct dtv_property prop[3];
-    prop[0].cmd = DTV_FREQUENCY;
-    prop[0].u.data = jt->second.frequency;
-    prop[1].cmd = DTV_ISDBS_TS_ID;
-    prop[1].u.data = jt->second.ts_id;
-    prop[2].cmd = DTV_TUNE;
-
-    struct dtv_properties props;
-    props.props = prop;
-    props.num = 3;
-    if (ioctl(fd, FE_SET_PROPERTY, &props) == -1) {
-      std::perror("ioctl FE_SET_PROPERTY");
-      goto CLEANUP;
-    }
-
-    fe_status_t status;
-    for (int j = 0; j < 4; j++) {
-      if (ioctl(fd, FE_READ_STATUS, &status) == -1) {
-        std::perror("ioctl FE_READ_STATUS");
-      }
-      if (status & FE_HAS_LOCK) {
-        frontend_fd_ = fd;
-        adapter_ = it;
-        return true;
-      }
-      usleep(250 * 1000);
-    }
-    std::cerr << "failed to tune to " << jt->first << " (status " << status << ")" << std::endl;
-
-CLEANUP:
-    close(fd);
-    fd = -1;
+    close(frontend_fd_);
+    frontend_fd_ = -1;
+    adapter_ = adapters_.cend();
   }
+  return false;
+}
+
+bool tuner::tune_impl(int ch)
+{
+  DECLTYPE(channels_)::const_iterator jt = channels_.cend();
+
+  struct dvb_frontend_info info;
+  if (ioctl(frontend_fd_, FE_GET_INFO, &info) == -1) {
+    std::perror("ioctl FE_GET_INFO");
+    return false;
+  }
+  if (info.type == FE_OFDM) {
+    jt = channels_.find(ch);
+  }
+  if (jt == channels_.cend()) {
+    return false;
+  }
+
+  struct dtv_property prop[3];
+  prop[0].cmd = DTV_FREQUENCY;
+  prop[0].u.data = jt->second.frequency;
+  prop[1].cmd = DTV_ISDBS_TS_ID;
+  prop[1].u.data = jt->second.ts_id;
+  prop[2].cmd = DTV_TUNE;
+
+  struct dtv_properties props;
+  props.props = prop;
+  props.num = 3;
+  if (ioctl(frontend_fd_, FE_SET_PROPERTY, &props) == -1) {
+    std::perror("ioctl FE_SET_PROPERTY");
+    return false;
+  }
+
+  fe_status_t status;
+  for (int j = 0; j < 4; j++) {
+    if (ioctl(frontend_fd_, FE_READ_STATUS, &status) == -1) {
+      std::perror("ioctl FE_READ_STATUS");
+    }
+    if (status & FE_HAS_LOCK) {
+      return true;
+    }
+    usleep(250 * 1000);
+  }
+  std::cerr << "failed to tune to " << jt->first << " (status " << status << ")" << std::endl;
   return false;
 }
 

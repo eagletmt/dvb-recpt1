@@ -22,6 +22,8 @@ class tuner
   DECLTYPE(adapters_)::const_iterator adapter_;
   std::unordered_map<int, channel> channels_;
 
+  bool tune_impl(int ch);
+
 public:
   tuner(const std::vector<std::string>& adapters, const std::unordered_map<int, channel>& channels);
   ~tuner();
