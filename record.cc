@@ -147,7 +147,7 @@ void recorder(int duration, recpt1::tuner& tuner, const char *outfile)
   socklen_t socklen;
   std::string sock_path;
   int listenfd = create_master(tuner.adapter(), sock_path, sun, socklen);
-  std::thread master([&f_exit, &tuner, listenfd, &sun, &socklen]() {
+  std::thread master([&f_exit, &tuner, &timer, listenfd, &sun, &socklen]() {
     while (!f_exit) {
       int fd = accept(listenfd, static_cast<sockaddr *>(static_cast<void *>(&sun)), &socklen);
       if (fd != -1) {
@@ -159,16 +159,26 @@ void recorder(int duration, recpt1::tuner& tuner, const char *outfile)
           buf[n] = '\0';
           std::istringstream iss(buf);
           std::string cmd;
-          if (iss >> cmd && cmd == "tune") {
-            int ch;
-            if (iss >> ch) {
-              std::cout << "Switch to channel " << ch << "..." << std::endl;
-              if (tuner.tune(ch) && tuner.track()) {
-                std::cout << "Successfully tuned" << std::endl;
-              } else {
-                std::cout << "Failed to tune!" << std::endl;
-                f_exit = true;
+          if (iss >> cmd) {
+            if (cmd == "tune") {
+              int ch;
+              if (iss >> ch) {
+                std::cout << "Switch to channel " << ch << "..." << std::endl;
+                if (tuner.tune(ch) && tuner.track()) {
+                  std::cout << "Successfully tuned" << std::endl;
+                } else {
+                  std::cout << "Failed to tune!" << std::endl;
+                  f_exit = true;
+                }
               }
+            } else if (cmd == "extend") {
+              int t;
+              if (iss >> t) {
+                std::cout << "Extend time " << t << "..." << std::endl;
+                timer.extend(t);
+              }
+            } else {
+              std::cerr << "Unknown command " << cmd << std::endl;
             }
           }
         }

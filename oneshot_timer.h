@@ -11,6 +11,7 @@ public:
   oneshot_timer(int sec);
   ~oneshot_timer();
   inline int fd() const { return fd_; }
+  bool extend(int sec);
 };
 
 };

@@ -12,8 +12,10 @@ static void die(const char *msg)
 }
 
 static char *sockpath;
+static int connect_or_die(void);
 
 static void tune(int ch);
+static void extend(int t);
 
 int main(int argc, char *argv[])
 {
@@ -37,6 +39,15 @@ int main(int argc, char *argv[])
     } else {
       tune(ch);
     }
+  } else if (strcmp(cmd, "extend") == 0) {
+    const char *arg = argv[3];
+    char *endptr = NULL;
+    int t = strtol(arg, &endptr, 10);
+    if (*endptr != '\0') {
+      fprintf(stderr, "invalid time: %s\n", arg);
+    } else {
+      extend(t);
+    }
   } else {
     fprintf(stderr, "unknown command %s\n", cmd);
     return 1;
@@ -44,7 +55,7 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-static void tune(int ch)
+int connect_or_die(void)
 {
   int fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if (fd == -1) {
@@ -57,8 +68,22 @@ static void tune(int ch)
   if (connect(fd, (struct sockaddr *)&sun, len) == -1) {
     die("cocnnect");
   }
+  return fd;
+}
 
+void tune(int ch)
+{
+  int fd = connect_or_die();
   char buf[32];
   int n = snprintf(buf, sizeof buf, "tune %d\n",ch);
+  send(fd, buf, n, 0);
+}
+
+void extend(int t)
+{
+  int fd = connect_or_die();
+
+  char buf[32];
+  int n = snprintf(buf, sizeof buf, "extend %d\n", t);
   send(fd, buf, n, 0);
 }

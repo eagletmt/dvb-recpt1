@@ -34,4 +34,16 @@ oneshot_timer::~oneshot_timer()
   }
 }
 
+bool oneshot_timer::extend(int sec)
+{
+  if (fd_ == -1) {
+    return false;
+  }
+  struct itimerspec spec;
+  if (timerfd_gettime(fd_, &spec) == -1) {
+    return false;
+  }
+  spec.it_value.tv_sec += sec;
+  return timerfd_settime(fd_, 0, &spec, NULL) == 0;
+}
 };
