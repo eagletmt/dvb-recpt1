@@ -83,7 +83,11 @@ bool tuner::tune_impl(int ch)
   struct dtv_property prop[3];
   prop[0].cmd = DTV_FREQUENCY;
   prop[0].u.data = jt->second.frequency;
+#ifdef DTV_STREAM_ID
+  prop[1].cmd = DTV_STREAM_ID;
+#else
   prop[1].cmd = DTV_ISDBS_TS_ID;
+#endif
   prop[1].u.data = jt->second.ts_id;
   prop[2].cmd = DTV_TUNE;
 
