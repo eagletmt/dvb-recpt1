@@ -22,8 +22,8 @@
 namespace po = boost::program_options;
 
 static const int DEFAULT_CHUNK_SIZE = 131072;
-static const char *ADAPTERS_CONFIG_FILE_PATH = "/etc/recpt1/adapters.conf";
-static const char *CHANNELS_CONFIG_FILE_PATH = "/etc/recpt1/channels.conf";
+static const char *ADAPTERS_CONFIG_FILE_PATH = SYSCONFDIR "/recpt1/adapters.conf";
+static const char *CHANNELS_CONFIG_FILE_PATH = SYSCONFDIR "/recpt1/channels.conf";
 
 static void die(const char *msg) __attribute__((noreturn));
 static void recorder(int duration, recpt1::tuner& tuner, const char *outfile);
