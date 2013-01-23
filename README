@@ -1,0 +1,4 @@
+## Install
+    % autoreconf -i
+    % ./configure
+    # make install
