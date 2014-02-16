@@ -1,4 +1,4 @@
 ## Install
-    % autoreconf -i
+    % cmake . -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX=/usr -DSYSCONFDIR=/etc
     % ./configure
     # make install

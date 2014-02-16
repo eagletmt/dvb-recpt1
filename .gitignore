@@ -1,3 +1,10 @@
-.omakedb*
-*.omc
 *.o
+recpt1
+recpt1ctl
+
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+install_manifest.txt
+config.h

@@ -17,6 +17,7 @@
 #include <poll.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
+#include "config.h"
 #include "tuner.h"
 #include "oneshot_timer.h"
 namespace po = boost::program_options;
