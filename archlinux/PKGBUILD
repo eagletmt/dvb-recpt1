@@ -1,44 +1,31 @@
 # Maintainer: Kohei Suzuki <eagletmt@gmail.com>
 pkgname=dvb-recpt1-git
-pkgver=20130124
+pkgver=r16.d807fee
 pkgrel=1
 pkgdesc="recpt1 for earth-pt1 driver"
 arch=(i686 x86_64)
 url="https://github.com/eagletmt/dvb-recpt1"
 license=('MIT')
 depends=('boost-libs')
-makedepends=('git' 'boost')
+makedepends=('git' 'boost' 'cmake')
 backup=('etc/recpt1/adapters.conf' 'etc/recpt1/channels.conf')
+source=("$pkgname"::'git+https://github.com/eagletmt/dvb-recpt1')
 
-_gitroot=git://github.com/eagletmt/dvb-recpt1.git
-_gitname=dvb-recpt1
+pkgver() {
+  cd "$srcdir/$pkgname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
 
 build() {
-  cd "$srcdir"
-  msg "Connecting to GIT server...."
-
-  if [[ -d "$_gitname" ]]; then
-    cd "$_gitname" && git pull origin
-    msg "The local files are updated."
-  else
-    git clone "$_gitroot" "$_gitname"
-  fi
-
-  msg "GIT checkout done or server timeout"
-  msg "Starting build..."
-
-  rm -rf "$srcdir/$_gitname-build"
-  git clone "$srcdir/$_gitname" "$srcdir/$_gitname-build"
-  cd "$srcdir/$_gitname-build"
-
-  autoreconf -i
-  ./configure --prefix=/usr --sysconfdir=/etc
+  cd "$srcdir/$pkgname"
+  cmake . -DCMAKE_BUILD_TYPE=release -DCMAKE_INSTALL_PREFIX=/usr -DSYSCONFDIR=/etc
   make
 }
 
 package() {
-  cd "$srcdir/$_gitname-build"
+  cd "$srcdir/$pkgname"
   make DESTDIR="$pkgdir/" install
 }
 
 # vim:set ts=2 sw=2 et:
+sha1sums=('SKIP')
