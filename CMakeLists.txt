@@ -25,4 +25,4 @@ target_link_libraries(recpt1 boost_program_options)
 add_executable(recpt1ctl recpt1ctl.c)
 
 install(PROGRAMS recpt1 recpt1ctl DESTINATION bin)
-install(FILES adapters.conf channels.conf DESTINATION ${SYSCONFDIR})
+install(FILES adapters.conf channels.conf DESTINATION "${SYSCONFDIR}/recpt1")
